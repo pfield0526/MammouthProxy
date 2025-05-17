@@ -146,6 +146,13 @@ function handleNonStreamResponse(axiosResponse, res, requestedModel) {
   const timestamp = Math.floor(Date.now() / 1000)
   
   // 格式化为OpenAI的响应格式
+  let content = axiosResponse.data.content;
+  
+  // 如果内容是字符串且被引号包裹，移除外层引号
+  if (typeof content === 'string' && content.startsWith('"') && content.endsWith('"')) {
+    content = content.slice(1, -1);
+  }
+  
   const responseData = {
     id: `chatcmpl-${requestId}`,
     object: "chat.completion",
@@ -155,7 +162,7 @@ function handleNonStreamResponse(axiosResponse, res, requestedModel) {
       index: 0,
       message: {
         role: "assistant",
-        content: axiosResponse.data.content || JSON.stringify(axiosResponse.data)
+        content: content || axiosResponse.data
       },
       finish_reason: "stop"
     }],
