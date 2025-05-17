@@ -1,0 +1,10 @@
+services:
+  mammouth-proxy:
+    image: rfym21/mammouth-proxy:latest
+    container_name: mammouth-proxy
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - COOKIES=your_cookies_here  # 填入Mammouth账号的Cookie，多个账号用逗号分隔
+      - AUTH_TOKEN=your_auth_token_here  # 设置API认证密钥
