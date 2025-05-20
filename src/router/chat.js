@@ -4,6 +4,7 @@ const FormData = require('form-data')
 const { v4: uuidv4 } = require('uuid')
 const { MODEL_MAPPING, MAMMOUTH_API_URL, AUTH_TOKEN ,UNLIMITED_MODELS} = require('../config')
 const accountManager = require('../lib/manager')
+const imageUploader = require('../lib/uploader')
 
 const router = express.Router()
 
@@ -42,7 +43,7 @@ function isUnlimitedModel(model) {
 }
 
 // 将OpenAI格式转换为Mammouth格式
-function convertOpenAIToMammouth(openaiRequest) {
+async function convertOpenAIToMammouth(openaiRequest) {
   const form = new FormData()
   
   // 模型选择，如果映射中不存在则使用默认值
@@ -66,14 +67,53 @@ function convertOpenAIToMammouth(openaiRequest) {
   const preprompt = systemMessages.join('\n\n')
   form.append('preprompt', preprompt)
   
-  // 只处理非system角色的消息
-  regularMessages.forEach(message => {
+  // 处理非system角色的消息
+  for (const message of regularMessages) {
+    // 处理包含图片的消息
+    const imagesData = []
+    let content = message.content
+
+    // 如果是对象数组（多模态内容）
+    if (Array.isArray(message.content)) {
+      const textParts = []
+      
+      // 遍历内容部分
+      for (const part of message.content) {
+        if (part.type === 'text') {
+          textParts.push(part.text)
+        } else if (part.type === 'image_url') {
+          try {
+            // 获取图片数据
+            let imageUrl = part.image_url
+            if (typeof imageUrl === 'object' && imageUrl.url) {
+              imageUrl = imageUrl.url
+            }
+            
+            // 处理base64图片
+            if (imageUrl.startsWith('data:image')) {
+              const uploadedImageLocation = await imageUploader.uploadFromBase64(imageUrl)
+              imagesData.push(uploadedImageLocation)
+            } else {
+              // 处理URL图片
+              const uploadedImageLocation = await imageUploader.uploadFromUrl(imageUrl)
+              imagesData.push(uploadedImageLocation)
+            }
+          } catch (error) {
+            console.error('图片处理错误:', error.message)
+          }
+        }
+      }
+      
+      // 将所有文本部分合并
+      content = textParts.join('\n')
+    }
+    
     form.append('messages', JSON.stringify({
-      content: message.content,
-      imagesData: [],
+      content: content,
+      imagesData: imagesData,
       documentsData: []
     }))
-  })
+  }
   
   return form
 }
@@ -220,7 +260,7 @@ router.post('/completions', authenticate, async (req, res) => {
     }
     
     // 转换请求格式
-    const form = convertOpenAIToMammouth(openaiRequest)
+    const form = await convertOpenAIToMammouth(openaiRequest)
     
     // 获取Cookie - 根据模型类型使用不同的获取方法
     const cookieValue = isUnlimitedModel(requestedModel) 
@@ -397,5 +437,90 @@ router.post('/completions', authenticate, async (req, res) => {
     })
   }
 })
+
+// 仅供内部测试的图片上传功能路由（不要在生产环境中使用）
+if (process.env.NODE_ENV === 'development') {
+  router.post('/_test_upload_image', authenticate, async (req, res) => {
+    try {
+      // 确保请求中包含图片数据
+      if (!req.body.image) {
+        return res.status(400).json({
+          error: {
+            message: '请求中缺少图片数据',
+            type: 'invalid_request_error'
+          }
+        })
+      }
+
+      let result
+      // 处理不同类型的图片数据
+      if (req.body.image.startsWith('data:image')) {
+        // 处理Base64编码的图片
+        result = await imageUploader.uploadFromBase64(req.body.image)
+      } else if (req.body.image.startsWith('http')) {
+        // 处理图片URL
+        result = await imageUploader.uploadFromUrl(req.body.image)
+      } else {
+        return res.status(400).json({
+          error: {
+            message: '不支持的图片数据格式',
+            type: 'invalid_request_error'
+          }
+        })
+      }
+
+      // 返回上传结果
+      res.json({
+        success: true,
+        location: result
+      })
+    } catch (error) {
+      console.error('测试图片上传错误:', error)
+      res.status(500).json({
+        error: {
+          message: '图片上传失败',
+          type: 'server_error',
+          details: error.message
+        }
+      })
+    }
+  })
+  
+  // 图片缓存状态接口
+  router.get('/_image_cache_stats', authenticate, (req, res) => {
+    try {
+      const stats = imageUploader.getCacheStats()
+      res.json({
+        success: true,
+        stats: stats
+      })
+    } catch (error) {
+      res.status(500).json({
+        error: {
+          message: '获取缓存状态失败',
+          details: error.message
+        }
+      })
+    }
+  })
+  
+  // 清除图片缓存接口
+  router.post('/_clear_image_cache', authenticate, (req, res) => {
+    try {
+      const result = imageUploader.clearCache()
+      res.json({
+        success: true,
+        ...result
+      })
+    } catch (error) {
+      res.status(500).json({
+        error: {
+          message: '清除缓存失败',
+          details: error.message
+        }
+      })
+    }
+  })
+}
 
 module.exports = router 
