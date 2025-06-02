@@ -117,8 +117,11 @@ curl http://localhost:3000/v1/chat/completions \
 |-------------------|-------------------|
 | claude-3-7-sonnet-latest | anthropic-claude-3-7-sonnet-latest |
 | gpt-4o-mini | openai-gpt-4o-mini |
+ | o4-mini| openai-o4-mini |
 | gemini-2.5-pro-preview-05-06 | google-gemini-2.5-pro |
 | grok-3 | xai-grok-3-beta |
+
+**除去Claude和Gemini似乎都不太稳定，谨慎使用**
 
 ## 项目结构
 
