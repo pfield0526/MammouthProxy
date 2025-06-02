@@ -46,9 +46,9 @@ function isUnlimitedModel(model) {
 async function convertOpenAIToMammouth(openaiRequest) {
   const form = new FormData()
   
-  // 模型选择，如果映射中不存在则使用默认值
-  const requestedModel = openaiRequest.model || 'claude-3-7-sonnet-latest'
-  const mammouthModel = MODEL_MAPPING[requestedModel] || 'anthropic-claude-3-7-sonnet-latest'
+  // 模型选择
+  const requestedModel = openaiRequest.model
+  const mammouthModel = MODEL_MAPPING[requestedModel] || openaiRequest.model
   form.append('model', mammouthModel)
   
   // 提取system角色的消息作为preprompt
