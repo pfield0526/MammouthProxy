@@ -6,7 +6,10 @@ const MAMMOUTH_API_URL = 'https://mammouth.ai/api/models/llms'
 // 模型映射表：OpenAI模型名称 -> Mammouth模型名称
 const MODEL_MAPPING = {
   'claude-sonnet-4-20250514': 'anthropic-claude-4-2025-05-14',
-  'gpt-4o-mini': 'openai-gpt-4o-mini'
+  'gpt-4o-mini': 'openai-gpt-4o-mini',
+  'gemini-2.5-pro-preview-05-06': 'google-gemini-2.5-pro',
+  'grok-3': 'xai-grok-3-beta',
+  'o4-mini': 'openai-o4-mini',
 }
 
 const UNLIMITED_MODELS = [
