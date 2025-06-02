@@ -251,7 +251,7 @@ router.post('/completions', authenticate, async (req, res) => {
   try {
     const openaiRequest = req.body
     const isStreamRequest = openaiRequest.stream === true
-    const requestedModel = openaiRequest.model || 'claude-3-7-sonnet-latest'
+    const requestedModel = openaiRequest.model
     
     // 设置适当的响应头
     if (isStreamRequest) {
