@@ -122,6 +122,7 @@ async function convertOpenAIToMammouth(openaiRequest) {
 async function handleStreamResponse(axiosResponse, res, requestedModel) {
   const requestId = uuidv4()
   const timestamp = Math.floor(Date.now() / 1000)
+  const decoder = new TextDecoder()
   
   // 发送初始角色数据
   res.write(`data: ${JSON.stringify({
@@ -137,7 +138,7 @@ async function handleStreamResponse(axiosResponse, res, requestedModel) {
   })}\n\n`)
 
   axiosResponse.data.on('data', (chunk) => {
-    const chunkStr = chunk.toString()
+    const chunkStr = decoder.decode(chunk, { stream: true })
     
     // 直接将文本内容作为OpenAI流格式发送
     const textToSend = chunkStr
@@ -438,89 +439,5 @@ router.post('/completions', authenticate, async (req, res) => {
   }
 })
 
-// 仅供内部测试的图片上传功能路由（不要在生产环境中使用）
-if (process.env.NODE_ENV === 'development') {
-  router.post('/_test_upload_image', authenticate, async (req, res) => {
-    try {
-      // 确保请求中包含图片数据
-      if (!req.body.image) {
-        return res.status(400).json({
-          error: {
-            message: '请求中缺少图片数据',
-            type: 'invalid_request_error'
-          }
-        })
-      }
-
-      let result
-      // 处理不同类型的图片数据
-      if (req.body.image.startsWith('data:image')) {
-        // 处理Base64编码的图片
-        result = await imageUploader.uploadFromBase64(req.body.image)
-      } else if (req.body.image.startsWith('http')) {
-        // 处理图片URL
-        result = await imageUploader.uploadFromUrl(req.body.image)
-      } else {
-        return res.status(400).json({
-          error: {
-            message: '不支持的图片数据格式',
-            type: 'invalid_request_error'
-          }
-        })
-      }
-
-      // 返回上传结果
-      res.json({
-        success: true,
-        location: result
-      })
-    } catch (error) {
-      console.error('测试图片上传错误:', error)
-      res.status(500).json({
-        error: {
-          message: '图片上传失败',
-          type: 'server_error',
-          details: error.message
-        }
-      })
-    }
-  })
-  
-  // 图片缓存状态接口
-  router.get('/_image_cache_stats', authenticate, (req, res) => {
-    try {
-      const stats = imageUploader.getCacheStats()
-      res.json({
-        success: true,
-        stats: stats
-      })
-    } catch (error) {
-      res.status(500).json({
-        error: {
-          message: '获取缓存状态失败',
-          details: error.message
-        }
-      })
-    }
-  })
-  
-  // 清除图片缓存接口
-  router.post('/_clear_image_cache', authenticate, (req, res) => {
-    try {
-      const result = imageUploader.clearCache()
-      res.json({
-        success: true,
-        ...result
-      })
-    } catch (error) {
-      res.status(500).json({
-        error: {
-          message: '清除缓存失败',
-          details: error.message
-        }
-      })
-    }
-  })
-}
 
 module.exports = router 
