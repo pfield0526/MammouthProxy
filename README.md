@@ -48,8 +48,6 @@ npm start
 1. 创建docker-compose.yml
 
 ```yaml
-version: '3'
-
 services:
   mammouth-proxy:
     image: rfym21/mammouth-proxy:latest
