@@ -10,7 +10,7 @@ const router = express.Router()
 
 // API密钥认证中间件
 const authenticate = (req, res, next) => {
-  const authHeader = req.headers.authorization
+  const authHeader = req.headers.authorization || req.headers.Authorization || req.headers['x-api-key']
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
