@@ -34,7 +34,7 @@
 
 | 🏷️ OpenAI 格式模型名称 | 📊 Mammouth 平台对应模型 | 📈 稳定性 |
 |-----------|-------------|---------|
-| 🔮 `claude-3-7-sonnet-latest` | `anthropic-claude-3-7-sonnet-latest` | 高 |
+| 🔮 `claude-sonnet-4-20250514` | `anthropic-claude-4-2025-05-14` | 高 |
 | 🤖 `gpt-4o-mini` | `openai-gpt-4o-mini` | 中 |
 | 🤖 `o4-mini` | `openai-o4-mini` | 中 |
 | 🧠 `gemini-2.5-pro-preview-05-06` | `google-gemini-2.5-pro` | 高 |
