@@ -2,7 +2,7 @@ const express = require('express')
 const axios = require('axios')
 const FormData = require('form-data')
 const { v4: uuidv4 } = require('uuid')
-const { MODEL_MAPPING, MAMMOUTH_API_URL, AUTH_TOKEN ,UNLIMITED_MODELS} = require('../config')
+const { MODEL_MAPPING, MAMMOUTH_API_URL, AUTH_TOKEN, UNLIMITED_MODELS } = require('../config')
 const accountManager = require('../lib/manager')
 const imageUploader = require('../lib/uploader')
 
@@ -11,7 +11,7 @@ const router = express.Router()
 // API密钥认证中间件
 const authenticate = (req, res, next) => {
   const authHeader = req.headers.authorization
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
       error: {
@@ -21,9 +21,9 @@ const authenticate = (req, res, next) => {
       }
     })
   }
-  
+
   const apiKey = authHeader.substring(7)
-  
+
   if (apiKey !== AUTH_TOKEN) {
     return res.status(401).json({
       error: {
@@ -33,7 +33,7 @@ const authenticate = (req, res, next) => {
       }
     })
   }
-  
+
   next()
 }
 
@@ -45,16 +45,16 @@ function isUnlimitedModel(model) {
 // 将OpenAI格式转换为Mammouth格式
 async function convertOpenAIToMammouth(openaiRequest) {
   const form = new FormData()
-  
+
   // 模型选择
   const requestedModel = openaiRequest.model
   const mammouthModel = MODEL_MAPPING[requestedModel] || openaiRequest.model
   form.append('model', mammouthModel)
-  
+
   // 提取system角色的消息作为preprompt
   let systemMessages = []
   let regularMessages = []
-  
+
   openaiRequest.messages.forEach(message => {
     if (message.role === 'system') {
       systemMessages.push(message.content)
@@ -62,11 +62,11 @@ async function convertOpenAIToMammouth(openaiRequest) {
       regularMessages.push(message)
     }
   })
-  
+
   // 将所有system消息组合为preprompt
   const preprompt = systemMessages.join('\n\n')
   form.append('preprompt', preprompt)
-  
+
   // 处理非system角色的消息
   for (const message of regularMessages) {
     // 处理包含图片的消息
@@ -76,7 +76,7 @@ async function convertOpenAIToMammouth(openaiRequest) {
     // 如果是对象数组（多模态内容）
     if (Array.isArray(message.content)) {
       const textParts = []
-      
+
       // 遍历内容部分
       for (const part of message.content) {
         if (part.type === 'text') {
@@ -88,7 +88,7 @@ async function convertOpenAIToMammouth(openaiRequest) {
             if (typeof imageUrl === 'object' && imageUrl.url) {
               imageUrl = imageUrl.url
             }
-            
+
             // 处理base64图片
             if (imageUrl.startsWith('data:image')) {
               const uploadedImageLocation = await imageUploader.uploadFromBase64(imageUrl)
@@ -103,18 +103,22 @@ async function convertOpenAIToMammouth(openaiRequest) {
           }
         }
       }
-      
+
       // 将所有文本部分合并
       content = textParts.join('\n')
     }
-    
+    if (!content || content === '') {
+      // 如果只上传了图片而没有文本,则添加".",防止报错
+      content = '.'
+    }
+
     form.append('messages', JSON.stringify({
       content: content,
       imagesData: imagesData,
       documentsData: []
     }))
   }
-  
+
   return form
 }
 
@@ -123,7 +127,7 @@ async function handleStreamResponse(axiosResponse, res, requestedModel) {
   const requestId = uuidv4()
   const timestamp = Math.floor(Date.now() / 1000)
   const decoder = new TextDecoder()
-  
+
   // 发送初始角色数据
   res.write(`data: ${JSON.stringify({
     id: `chatcmpl-${requestId}`,
@@ -139,7 +143,7 @@ async function handleStreamResponse(axiosResponse, res, requestedModel) {
 
   axiosResponse.data.on('data', (chunk) => {
     const chunkStr = decoder.decode(chunk, { stream: true })
-    
+
     // 直接将文本内容作为OpenAI流格式发送
     const textToSend = chunkStr
     if (textToSend) {
@@ -156,7 +160,7 @@ async function handleStreamResponse(axiosResponse, res, requestedModel) {
       })}\n\n`)
     }
   })
-  
+
   axiosResponse.data.on('end', () => {
     // 发送完成信号
     res.write(`data: ${JSON.stringify({
@@ -170,11 +174,11 @@ async function handleStreamResponse(axiosResponse, res, requestedModel) {
         finish_reason: "stop"
       }]
     })}\n\n`)
-    
+
     res.write('data: [DONE]\n\n')
     res.end()
   })
-  
+
   axiosResponse.data.on('error', (err) => {
     console.error('流数据处理错误:', err)
     res.status(500).end()
@@ -185,15 +189,15 @@ async function handleStreamResponse(axiosResponse, res, requestedModel) {
 function handleNonStreamResponse(axiosResponse, res, requestedModel) {
   const requestId = uuidv4()
   const timestamp = Math.floor(Date.now() / 1000)
-  
+
   // 格式化为OpenAI的响应格式
   let content = axiosResponse.data.content;
-  
+
   // 如果内容是字符串且被引号包裹，移除外层引号
   if (typeof content === 'string' && content.startsWith('"') && content.endsWith('"')) {
     content = content.slice(1, -1);
   }
-  
+
   const responseData = {
     id: `chatcmpl-${requestId}`,
     object: "chat.completion",
@@ -213,7 +217,7 @@ function handleNonStreamResponse(axiosResponse, res, requestedModel) {
       total_tokens: 0
     }
   }
-  
+
   res.json(responseData)
 }
 
@@ -222,23 +226,23 @@ async function retryWithNewCookie(req, res, config, currentCookie, requestedMode
   try {
     // 标记当前Cookie为不可用
     accountManager.markAsUnavailable(currentCookie)
-    
+
     // 获取新的Cookie
     const newCookie = accountManager.getNextAvailableCookie()
-    
+
     // 更新请求配置中的Cookie
     config.headers.Cookie = `auth_session=${newCookie}`
-    
+
     // 发送请求到Mammouth API
     const response = await axios(config)
-    
+
     // 处理响应
     if (isStreamRequest) {
       handleStreamResponse(response, res, requestedModel)
     } else {
       handleNonStreamResponse(response, res, requestedModel)
     }
-    
+
     return true
   } catch (error) {
     // 如果重试也失败了，返回false
@@ -252,22 +256,22 @@ router.post('/completions', authenticate, async (req, res) => {
     const openaiRequest = req.body
     const isStreamRequest = openaiRequest.stream === true
     const requestedModel = openaiRequest.model
-    
+
     // 设置适当的响应头
     if (isStreamRequest) {
       res.setHeader('Content-Type', 'text/event-stream')
       res.setHeader('Cache-Control', 'no-cache')
       res.setHeader('Connection', 'keep-alive')
     }
-    
+
     // 转换请求格式
     const form = await convertOpenAIToMammouth(openaiRequest)
-    
+
     // 获取Cookie - 根据模型类型使用不同的获取方法
-    const cookieValue = isUnlimitedModel(requestedModel) 
+    const cookieValue = isUnlimitedModel(requestedModel)
       ? accountManager.getAnyCookie()
       : accountManager.getNextAvailableCookie()
-    
+
     // 准备请求配置
     const config = {
       method: 'post',
@@ -280,11 +284,11 @@ router.post('/completions', authenticate, async (req, res) => {
       data: form,
       responseType: isStreamRequest ? 'stream' : 'json'
     }
-    
+
     try {
       // 发送请求到Mammouth API
       const response = await axios(config)
-      
+
       // 处理响应
       if (isStreamRequest) {
         handleStreamResponse(response, res, requestedModel)
@@ -296,36 +300,36 @@ router.post('/completions', authenticate, async (req, res) => {
       const errorStatus = error.response?.status || 'unknown'
       const errorMessage = error.response?.data?.message || error.message || 'Unknown error'
       console.error(`API转发错误: [${errorStatus}] ${errorMessage}`)
-      
+
       // 如果是403错误（达到使用限制）
       if (error.response && error.response.status === 403) {
         // console.log(error)
-        
+
         console.log(`账号 ${cookieValue.substring(0, 5)}... 使用模型 ${requestedModel} 已达到使用限制`)
-        
+
         // 根据模型类型进行不同处理
         if (isUnlimitedModel(requestedModel)) {
           // 不受限模型也返回403，尝试将当前账号标记为不可用并再试一次
           accountManager.markAsUnavailable(cookieValue)
-          
+
           // 对于不受限模型再次获取一个任意Cookie尝试
           const newCookie = accountManager.getAnyCookie()
           console.log(`尝试使用不受限模型的另一个账号: ${newCookie.substring(0, 5)}...`)
-          
+
           // 更新配置
           config.headers.Cookie = `auth_session=${newCookie}`
-          
+
           try {
             // 再次尝试请求
             const response = await axios(config)
-            
+
             // 处理响应
             if (isStreamRequest) {
               handleStreamResponse(response, res, requestedModel)
             } else {
               handleNonStreamResponse(response, res, requestedModel)
             }
-            
+
             // 成功，直接返回
             return
           } catch (retryError) {
@@ -338,20 +342,20 @@ router.post('/completions', authenticate, async (req, res) => {
           const cookieRetrySuccess = await retryWithNewCookie(
             req, res, config, cookieValue, requestedModel, isStreamRequest
           )
-          
+
           // 如果切换账号成功，就返回
           if (cookieRetrySuccess) return
         }
-        
+
         // 所有重试方法都失败，返回错误信息
-        const errorMessage = 
-          error.response.data?.message || 
-          error.response.data?.statusMessage || 
+        const errorMessage =
+          error.response.data?.message ||
+          error.response.data?.statusMessage ||
           '使用限制：所有账号已临时达到使用限制。请稍后再试。'
-        
+
         const requestId = uuidv4()
         const timestamp = Math.floor(Date.now() / 1000)
-        
+
         if (isStreamRequest) {
           // 流式响应情况下，以SSE格式返回错误消息
           res.write(`data: ${JSON.stringify({
@@ -365,7 +369,7 @@ router.post('/completions', authenticate, async (req, res) => {
               finish_reason: null
             }]
           })}\n\n`)
-          
+
           // 发送错误消息内容
           res.write(`data: ${JSON.stringify({
             id: `chatcmpl-${requestId}`,
@@ -378,7 +382,7 @@ router.post('/completions', authenticate, async (req, res) => {
               finish_reason: null
             }]
           })}\n\n`)
-          
+
           // 发送完成信号
           res.write(`data: ${JSON.stringify({
             id: `chatcmpl-${requestId}`,
@@ -391,7 +395,7 @@ router.post('/completions', authenticate, async (req, res) => {
               finish_reason: "stop"
             }]
           })}\n\n`)
-          
+
           res.write('data: [DONE]\n\n')
           res.end()
         } else {
