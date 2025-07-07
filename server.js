@@ -2,18 +2,10 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-app.get('/', (req, res) => {
-  res.send('Hello from Hardhat Express Web Service!');
-});
-
-app.listen(PORT, () => {
-  console.log(`Express server running on port ${PORT}`);
-});
-
-
 // 支持 json 请求体解析
 app.use(express.json());
 
+// 根路由
 app.get('/', (req, res) => {
   res.send('Hello from Hardhat Express Web Service!');
 });
@@ -27,6 +19,7 @@ app.post('/v1/chat/completions', (req, res) => {
   });
 });
 
+// 只需要监听一次端口！
 app.listen(PORT, () => {
   console.log(`Express server running on port ${PORT}`);
 });
