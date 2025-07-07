@@ -9,9 +9,7 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Express server running on port ${PORT}`);
 });
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 8080;
+
 
 // 支持 json 请求体解析
 app.use(express.json());
